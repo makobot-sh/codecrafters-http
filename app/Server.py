@@ -18,8 +18,14 @@ class Message():
         for str_header in header_list:
             if str_header == "":
                 continue
-            kv = str_header.split(":", 1)
+            kv = str_header.split(": ", 1)
             self._headers[kv[0]] = kv[1]
+        
+    def addHeader(self, key, value):
+        self._headers[key] = value
+    
+    def getHeader(self, key):
+        return self._headers[key]
 
 class Response(Message):
     def __init__(self, http_version=1.1, status_code=None, status_reason=""):
@@ -51,9 +57,6 @@ class Request(Message):
         self.target = target
         self._headers = {}
         self.body = ""
-
-    def addHeader(self, key, value):
-        self.headers[key] = value
 
     @property
     def request_line(self):
@@ -103,6 +106,8 @@ class Server:
                 self.OK_200(conn)
             if req.target.startswith("/echo"):
                 self.ECHO(conn, req)
+            if req.target.startswith("/user-agent"):
+                self.USER_AGENT(conn, req)
             else:
                 self.NOT_FOUND_404(conn)
 
@@ -118,6 +123,14 @@ class Server:
     
     def ECHO(self, conn, req):
         echo_str = req.target.split("/",2)[2]
+        res = Response(status_code=200, status_reason="OK")
+        res.addHeader("Content-Type","text/plain")
+        res.addHeader("Content-Length",len(echo_str))
+        res.body = echo_str
+        self.send(conn, res)
+    
+    def USER_AGENT(self, conn, req):
+        echo_str = req._headers["User-Agent"]
         res = Response(status_code=200, status_reason="OK")
         res.addHeader("Content-Type","text/plain")
         res.addHeader("Content-Length",len(echo_str))

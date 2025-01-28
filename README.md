@@ -14,6 +14,10 @@ and more.
 **Note**: If you're viewing this repo on GitHub, head over to
 [codecrafters.io](https://codecrafters.io) to try the challenge.
 
+# TODO and notes
+- header name sshould be case insensitive but aren't currently
+
+
 # Passing the first stage
 
 The entry point for your HTTP server implementation is in `app/main.py`. Study
