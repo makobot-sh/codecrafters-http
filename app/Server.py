@@ -3,13 +3,23 @@ import socket  # noqa: F401
 class Message():
     def print(self):
         res = self.render().decode()
-        if len(self._headers.keys()) == 0:
-            res = res[:-2]
-            if self.body == "": #If there's not headers or body remove the carriage return separating them from request line as well
-                res = res[:-2]
-        if self.body == "":
-            res = res[:-2]
-        return res
+        return res[:-2]
+    
+    @property
+    def headers(self):
+        return "\r\n".join([f"{k}: {v}" for k,v in self._headers.items()])
+    
+    @headers.setter
+    def headers(self, str_headers: str | list):
+        if isinstance(str_headers, str):
+            header_list = str_headers.split("\r\n")
+        else:
+            header_list = str_headers
+        for str_header in header_list:
+            if str_header == "":
+                continue
+            kv = str_header.split(":", 1)
+            self._headers[kv[0]] = kv[1]
 
 class Response(Message):
     def __init__(self, http_version=1.1, status_code=None, status_reason=""):
@@ -24,8 +34,11 @@ class Response(Message):
             print("Status code must be specified before rendering!")
             raise Exception("Tried to render a response without a status code set")
         status = f"HTTP/{self.http_version} {self.status_code} {self.status_reason}"
-        headers = "\r\n".join(self._headers)
-        response = f"{status}\r\n{headers}\r\n{self.body}\r\n"
+
+        response = status
+        response += f"\r\n{self.headers}" if len(self._headers.keys()) != 0 else ""
+        response += f"\r\n{self.body}" if self.body != "" else ""
+        response += "\r\n"
         return str.encode(response)
 
 class Request(Message):
@@ -48,22 +61,6 @@ class Request(Message):
         self.method, self.target, http_version = req_str.split(" ")
         assert http_version.startswith("HTTP/"), "HTTP version should start with HTTP/"
         self.http_version = http_version[5:]
-
-    @property
-    def headers(self):
-        return "\r\n".join([f"{k}: {v}" for k,v in self._headers.items()])
-    
-    @headers.setter
-    def headers(self, str_headers: str | list):
-        if isinstance(str_headers, str):
-            header_list = str_headers.split("\r\n")
-        else:
-            header_list = str_headers
-        for str_header in header_list:
-            if str_header == "":
-                continue
-            kv = str_header.split(":", 1)
-            self._headers[kv[0]] = kv[1]
     
     def parse(msg):
         dec_msg = msg.decode()
@@ -80,39 +77,37 @@ class Request(Message):
         if self.target is None:
             print("Target must be specified before rendering!")
             raise Exception("Tried to render a request without a target set")
-        response = f"{self.request_line}\r\n{self.headers}\r\n{self.body}\r\n"
+        response = self.request_line
+        response += f"\r\n{self.headers}" if len(self._headers.keys()) != 0 else ""
+        response += f"\r\n{self.body}" if self.body != "" else ""
+        response += "\r\n"
         return str.encode(response)
 
 class Server:
     def __init__(self, address: tuple[str,str]=("localhost", 4221), **kwargs):
         self.server_socket = socket.create_server(address, **kwargs)
         self.srv_host, self.srv_addr = address
-    
-    def await_incoming_connection(self):
-        self.conn, self.addr = self.server_socket.accept() # wait for client
-        
-        print(f"[{self.srv_host}:{self.srv_addr}] Connected by {self.addr}")
-        self.OK_200()
 
     def listen(self):
-        with self.conn:
-            while True:
-                data = self.conn.recv(1024)
-                if not data: break
-                req = Request.parse(data)
-                print(f"[{self.addr[0]}:{self.addr[1]}] {req.print()}")
-                if req.target == "/":
-                    self.OK_200()
-                else:
-                    self.NOT_FOUND_404()
+        conn, addr = self.server_socket.accept() # wait for client
+        print(f"[{self.srv_host}:{self.srv_addr}] Connected by {addr}")
+        with conn:
+            data = conn.recv(1024)
+            if not data: return
+            req = Request.parse(data)
+            print(f"[{addr[0]}:{addr[1]}] {req.print()}")
+            if req.target == "/":
+                self.OK_200(conn)
+            else:
+                self.NOT_FOUND_404(conn)
 
-    def send(self, res: Response):
+    def send(self, conn, res: Response):
         print(f"[{self.srv_host}:{self.srv_addr}] {res.print()}")
-        self.conn.sendall(res.render())
+        conn.sendall(res.render())
 
-    def OK_200(self):
-        self.send(Response(status_code=200, status_reason="OK"))
+    def OK_200(self, conn):
+        self.send(conn, Response(status_code=200, status_reason="OK"))
     
-    def NOT_FOUND_404(self):
-        self.send(Response(status_code=404, status_reason="Not Found"))
+    def NOT_FOUND_404(self, conn):
+        self.send(conn, Response(status_code=404, status_reason="Not Found"))
     
