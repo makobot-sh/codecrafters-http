@@ -8,7 +8,7 @@ class Server:
         self.conn, self.addr = self.server_socket.accept() # wait for client
         
         print(f"Connected by {self.addr}")
-        self.conn.sendall(b"HTTP/1.1 200 CONNECTED!!\r\n\r\n")
+        self.conn.sendall(b"HTTP/1.1 200 OK\r\n\r\n")
 
     def listen(self):
         with self.conn:
