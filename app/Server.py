@@ -29,6 +29,9 @@ class Response(Message):
         self._headers = {}
         self.body = ""
 
+    def addHeader(self, key, value):
+        self._headers[key] = value
+
     def render(self):
         if self.status_code is None:
             print("Status code must be specified before rendering!")
@@ -36,7 +39,7 @@ class Response(Message):
         status = f"HTTP/{self.http_version} {self.status_code} {self.status_reason}"
 
         response = status
-        response += f"\r\n{self.headers}" if len(self._headers.keys()) != 0 else ""
+        response += f"\r\n{self.headers}\r\n" if len(self._headers.keys()) != 0 else "\r\n"
         response += f"\r\n{self.body}" if self.body != "" else ""
         response += "\r\n"
         return str.encode(response)
@@ -78,7 +81,7 @@ class Request(Message):
             print("Target must be specified before rendering!")
             raise Exception("Tried to render a request without a target set")
         response = self.request_line
-        response += f"\r\n{self.headers}" if len(self._headers.keys()) != 0 else ""
+        response += f"\r\n{self.headers}" if len(self._headers.keys()) != 0 else "\r\n"
         response += f"\r\n{self.body}" if self.body != "" else ""
         response += "\r\n"
         return str.encode(response)
@@ -98,6 +101,8 @@ class Server:
             print(f"[{addr[0]}:{addr[1]}] {req.print()}")
             if req.target == "/":
                 self.OK_200(conn)
+            if req.target.startswith("/echo"):
+                self.ECHO(conn, req)
             else:
                 self.NOT_FOUND_404(conn)
 
@@ -110,4 +115,13 @@ class Server:
     
     def NOT_FOUND_404(self, conn):
         self.send(conn, Response(status_code=404, status_reason="Not Found"))
+    
+    def ECHO(self, conn, req):
+        echo_str = req.target.split("/",2)[2]
+        res = Response(status_code=200, status_reason="OK")
+        res.addHeader("Content-Type","text/plain")
+        res.addHeader("Content-Length",len(echo_str))
+        res.body = echo_str
+        self.send(conn, res)
+
     
